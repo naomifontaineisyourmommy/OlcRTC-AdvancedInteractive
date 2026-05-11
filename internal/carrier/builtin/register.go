@@ -4,20 +4,25 @@ package builtin
 import (
 	"context"
 
+	authWBStream "github.com/openlibrecommunity/olcrtc/internal/auth/wbstream"
 	"github.com/openlibrecommunity/olcrtc/internal/carrier"
+	_ "github.com/openlibrecommunity/olcrtc/internal/engine/livekit" // engine registration via init
 	"github.com/openlibrecommunity/olcrtc/internal/provider"
 	"github.com/openlibrecommunity/olcrtc/internal/provider/jazz"
 	"github.com/openlibrecommunity/olcrtc/internal/provider/telemost"
-	"github.com/openlibrecommunity/olcrtc/internal/provider/wbstream"
 )
 
 type providerFactory func(context.Context, provider.Config) (provider.Provider, error)
 
 // Register wires the built-in carriers into the carrier registry.
 func Register() {
+	// Legacy provider-based carriers (still being migrated to engine+auth).
 	registerProvider("jazz", jazz.New)
 	registerProvider("telemost", telemost.New)
-	registerProvider("wbstream", wbstream.New)
+
+	// Migrated to engine+auth: WB Stream now goes through the LiveKit engine
+	// with the wbstream auth provider.
+	registerEngineAuth("wbstream", authWBStream.Provider{})
 }
 
 func registerProvider(name string, factory providerFactory) {

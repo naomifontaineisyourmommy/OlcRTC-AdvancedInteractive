@@ -1,3 +1,7 @@
+// Package wbstream is the auth provider for the WB Stream service. It
+// produces LiveKit credentials by registering a guest, optionally creating
+// a room, joining it, and exchanging the guest access token for a room
+// token.
 package wbstream
 
 import (
@@ -12,7 +16,9 @@ import (
 	"github.com/openlibrecommunity/olcrtc/internal/protect"
 )
 
-var apiBase = "https://stream.wb.ru" //nolint:gochecknoglobals // package-level state intentional
+const wsURL = "wss://wbstream01-el.wb.ru:7880"
+
+var apiBase = "https://stream.wb.ru" //nolint:gochecknoglobals // overridable base URL for tests
 
 var (
 	errGuestRegister = errors.New("guest register failed")
@@ -124,19 +130,6 @@ func createRoom(ctx context.Context, accessToken string) (string, error) {
 		return "", fmt.Errorf("decode response: %w", err)
 	}
 	return res.RoomID, nil
-}
-
-// CreateRoom registers a temporary guest, creates a WB Stream room, and returns its id.
-func CreateRoom(ctx context.Context, displayName string) (string, error) {
-	accessToken, err := registerGuest(ctx, displayName)
-	if err != nil {
-		return "", fmt.Errorf("register guest: %w", err)
-	}
-	roomID, err := createRoom(ctx, accessToken)
-	if err != nil {
-		return "", fmt.Errorf("create room: %w", err)
-	}
-	return roomID, nil
 }
 
 func joinRoom(ctx context.Context, accessToken, roomID string) error {

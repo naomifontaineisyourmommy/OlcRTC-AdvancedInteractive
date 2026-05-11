@@ -8,6 +8,8 @@ import (
 	"slices"
 	"time"
 
+	"github.com/openlibrecommunity/olcrtc/internal/auth"
+	authWBStream "github.com/openlibrecommunity/olcrtc/internal/auth/wbstream"
 	"github.com/openlibrecommunity/olcrtc/internal/carrier"
 	"github.com/openlibrecommunity/olcrtc/internal/carrier/builtin"
 	"github.com/openlibrecommunity/olcrtc/internal/client"
@@ -15,7 +17,6 @@ import (
 	"github.com/openlibrecommunity/olcrtc/internal/link/direct"
 	"github.com/openlibrecommunity/olcrtc/internal/names"
 	"github.com/openlibrecommunity/olcrtc/internal/provider/jazz"
-	"github.com/openlibrecommunity/olcrtc/internal/provider/wbstream"
 	"github.com/openlibrecommunity/olcrtc/internal/server"
 	"github.com/openlibrecommunity/olcrtc/internal/transport"
 	"github.com/openlibrecommunity/olcrtc/internal/transport/datachannel"
@@ -443,6 +444,8 @@ func genRetry(ctx context.Context, fn func(context.Context) error) error {
 }
 
 // Gen creates cfg.Amount rooms for the configured carrier and writes each room ID to out.
+//
+//nolint:cyclop // transitional; refactor/universal-carrier replaces this with auth.RoomCreator dispatch
 func Gen(ctx context.Context, cfg Config, out func(string)) error {
 	switch cfg.Carrier {
 	case carrierJazz:
@@ -462,13 +465,17 @@ func Gen(ctx context.Context, cfg Config, out func(string)) error {
 			out(roomID)
 		}
 	case carrierWBStream:
+		creator, ok := any(authWBStream.Provider{}).(auth.RoomCreator)
+		if !ok {
+			return fmt.Errorf("%w: wbstream auth provider does not implement RoomCreator", ErrUnsupportedCarrier)
+		}
 		for i := range cfg.Amount {
 			var roomID string
 			err := genRetry(ctx, func(ctx context.Context) error {
 				var err error
-				roomID, err = wbstream.CreateRoom(ctx, names.Generate())
+				roomID, err = creator.CreateRoom(ctx, auth.Config{Name: names.Generate()})
 				if err != nil {
-					return fmt.Errorf("wbstream.CreateRoom: %w", err)
+					return fmt.Errorf("wbstream CreateRoom: %w", err)
 				}
 				return nil
 			})

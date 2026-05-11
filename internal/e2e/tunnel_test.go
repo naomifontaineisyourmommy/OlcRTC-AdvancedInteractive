@@ -17,11 +17,12 @@ import (
 	"time"
 
 	"github.com/openlibrecommunity/olcrtc/internal/app/session"
+	"github.com/openlibrecommunity/olcrtc/internal/auth"
+	authWBStream "github.com/openlibrecommunity/olcrtc/internal/auth/wbstream"
 	"github.com/openlibrecommunity/olcrtc/internal/carrier"
 	"github.com/openlibrecommunity/olcrtc/internal/client"
 	"github.com/openlibrecommunity/olcrtc/internal/link"
 	"github.com/openlibrecommunity/olcrtc/internal/provider/jazz"
-	"github.com/openlibrecommunity/olcrtc/internal/provider/wbstream"
 	"github.com/openlibrecommunity/olcrtc/internal/server"
 	"github.com/pion/webrtc/v4"
 )
@@ -372,7 +373,7 @@ func realRoomURL(ctx context.Context, t *testing.T, carrierName string) string {
 		if *realE2EWBStreamRoom != "" {
 			return *realE2EWBStreamRoom
 		}
-		room, err := wbstream.CreateRoom(ctx, "olcrtc-e2e-room")
+		room, err := authWBStream.Provider{}.CreateRoom(ctx, auth.Config{Name: "olcrtc-e2e-room"})
 		if err != nil {
 			t.Fatalf("create real wbstream room: %v", err)
 		}
