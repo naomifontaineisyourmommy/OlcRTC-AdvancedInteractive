@@ -63,25 +63,25 @@ fi
 
 echo "[+] Using Podman"
 echo ""
-echo "Select auth:"
+echo "Select auth provider:"
 echo "  1) telemost"
 echo "  2) jazz"
 echo "  3) wbstream"
-read -p "Enter choice [1-3, default: 3]: " CARRIER_CHOICE
+read -p "Enter choice [1-3, default: 3]: " AUTH_CHOICE
 
-case "$CARRIER_CHOICE" in
+case "$AUTH_CHOICE" in
     1)
-        CARRIER="telemost"
+        AUTH="telemost"
         ;;
     2)
-        CARRIER="jazz"
+        AUTH="jazz"
         ;;
     *)
-        CARRIER="wbstream"
+        AUTH="wbstream"
         ;;
 esac
 
-echo "[*] Using auth: $CARRIER"
+echo "[*] Using auth: $AUTH"
 echo ""
 
 echo "Select transport:"
@@ -111,7 +111,7 @@ echo ""
 
 GEN_ROOM=0
 
-if [ "$CARRIER" = "jazz" ] || [ "$CARRIER" = "wbstream" ]; then
+if [ "$AUTH" = "jazz" ] || [ "$AUTH" = "wbstream" ]; then
     echo "Room options:"
     echo "  1) Auto-generate new room (recommended)"
     echo "  2) Use specific room ID"
@@ -307,7 +307,7 @@ if [ "$GEN_ROOM" = "1" ]; then
         -v $WORK_DIR:/app:Z \
         -w /app \
         $IMAGE_NAME \
-        ./olcrtc -mode gen -auth "$CARRIER" -dns "$DNS" -amount 1 -data data)
+        ./olcrtc -mode gen -auth "$AUTH" -dns "$DNS" -amount 1 -data data)
     if [ -z "$ROOM_ID" ]; then
         echo "[X] Room generation failed"
         exit 1
@@ -340,7 +340,7 @@ podman run -d \
     -v $WORK_DIR:/app:Z \
     -w /app \
     $IMAGE_NAME \
-    ./olcrtc -mode srv -auth "$CARRIER" -id "$ROOM_ID" -client-id "$CLIENT_ID" -key "$KEY" \
+    ./olcrtc -mode srv -auth "$AUTH" -id "$ROOM_ID" -client-id "$CLIENT_ID" -key "$KEY" \
         -link direct -transport "$TRANSPORT" -dns "$DNS" -data data \
         "${EXTRA_ARGS[@]}" "${TRANSPORT_ARGS[@]}"
 
@@ -353,7 +353,7 @@ echo ""
 echo "[+] Server started successfully!"
 echo ""
 echo "Container name: $CONTAINER_NAME"
-echo "Auth:           $CARRIER"
+echo "Auth:           $AUTH"
 echo "Transport:      $TRANSPORT"
 echo "Room ID:        $ROOM_ID"
 echo "Client ID:      $CLIENT_ID"
@@ -375,7 +375,7 @@ elif [ "$TRANSPORT" = "videochannel" ]; then
     fi
 fi
 
-OLC_URI="olcrtc://$CARRIER?${TRANSPORT}${TRANSPORT_PAYLOAD}@$ROOM_ID#$KEY%$CLIENT_ID\$$sub_configname"
+OLC_URI="olcrtc://$AUTH?${TRANSPORT}${TRANSPORT_PAYLOAD}@$ROOM_ID#$KEY%$CLIENT_ID\$$sub_configname"
 echo "uri: $OLC_URI"
 echo ""
 
@@ -410,7 +410,7 @@ echo "Stop server:"
 echo "  podman stop $CONTAINER_NAME"
 echo ""
 echo "Client command:"
-echo -n "  ./olcrtc -mode cnc -auth \"$CARRIER\" -id \"$ROOM_ID\" -client-id \"$CLIENT_ID\" -key \"$KEY\" \\"
+echo -n "  ./olcrtc -mode cnc -auth \"$AUTH\" -id \"$ROOM_ID\" -client-id \"$CLIENT_ID\" -key \"$KEY\" \\"
 echo ""
 echo -n "    -link direct -transport \"$TRANSPORT\" -dns $DNS -data data \\"
 echo ""
