@@ -302,7 +302,7 @@ podman pull $IMAGE_NAME
 
 echo "[*] Building OlcRTC..."
 podman run --rm \
-    --add-host=host.containers.internal:host-gateway \
+    --network host \
     -v $WORK_DIR:/app:Z \
     -v $GOMOD_CACHE:/go/pkg/mod:Z \
     -v $GO_BUILD_CACHE:/root/.cache/go-build:Z \
@@ -318,7 +318,7 @@ fi
 if [ "$GEN_ROOM" = "1" ]; then
     echo "[*] Generating room via -mode gen..."
     ROOM_ID=$(podman run --rm \
-        --add-host=host.containers.internal:host-gateway \
+        --network host \
         -v $WORK_DIR:/app:Z \
         -w /app \
         $IMAGE_NAME \
@@ -350,6 +350,7 @@ fi
 
 echo "[*] Starting OlcRTC server..."
 podman run -d \
+    --network host \
     --name $CONTAINER_NAME \
     --add-host=host.containers.internal:host-gateway \
     --restart unless-stopped \
