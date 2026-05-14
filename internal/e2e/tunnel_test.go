@@ -346,6 +346,11 @@ func realE2ECaseExpectation(carrierName, transportName string) realE2EExpectatio
 		}
 	case "wbstream":
 		return realE2EExpectPass
+	case "jazz":
+		if transportName == "datachannel" {
+			return realE2EExpectFail
+		}
+		return realE2EExpectPass
 	default:
 		return realE2EExpectPass
 	}
@@ -359,6 +364,54 @@ func realE2EExpectationLabel(expectation realE2EExpectation) string {
 		return "BEST EFFORT"
 	default:
 		return "EXPECTED FAIL"
+	}
+}
+
+func TestRealE2ECaseExpectation(t *testing.T) {
+	tests := []struct {
+		name      string
+		carrier   string
+		transport string
+		want      realE2EExpectation
+	}{
+		{
+			name:      "jazz datachannel is expected to fail",
+			carrier:   "jazz",
+			transport: "datachannel",
+			want:      realE2EExpectFail,
+		},
+		{
+			name:      "jazz videochannel is expected to pass",
+			carrier:   "jazz",
+			transport: "videochannel",
+			want:      realE2EExpectPass,
+		},
+		{
+			name:      "telemost datachannel is expected to fail",
+			carrier:   "telemost",
+			transport: "datachannel",
+			want:      realE2EExpectFail,
+		},
+		{
+			name:      "telemost vp8channel is expected to pass",
+			carrier:   "telemost",
+			transport: "vp8channel",
+			want:      realE2EExpectPass,
+		},
+		{
+			name:      "wbstream datachannel is expected to pass",
+			carrier:   "wbstream",
+			transport: "datachannel",
+			want:      realE2EExpectPass,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := realE2ECaseExpectation(tt.carrier, tt.transport); got != tt.want {
+				t.Fatalf("realE2ECaseExpectation(%q, %q) = %v, want %v", tt.carrier, tt.transport, got, tt.want)
+			}
+		})
 	}
 }
 
