@@ -388,14 +388,14 @@ func (c *Client) handleReconnect(ctx context.Context, cfg Config, cancel context
 	if oldControlStop != nil {
 		oldControlStop()
 	}
-	if oldControl != nil {
-		_ = oldControl.Close()
-	}
 	if oldSess != nil {
 		_ = oldSess.Close()
 	}
 	if oldConn != nil {
 		_ = oldConn.Close()
+	}
+	if oldControl != nil {
+		_ = oldControl.Close()
 	}
 
 	// Server-side may still be tearing down its own session when our callback
@@ -587,6 +587,9 @@ func (c *Client) shutdown() {
 	if controlStop != nil {
 		controlStop()
 	}
+	if sess != nil {
+		_ = sess.Close()
+	}
 	if conn != nil {
 		_ = conn.Close()
 	}
@@ -595,9 +598,6 @@ func (c *Client) shutdown() {
 	}
 	if control != nil {
 		_ = control.Close()
-	}
-	if sess != nil {
-		_ = sess.Close()
 	}
 }
 

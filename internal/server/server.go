@@ -415,11 +415,11 @@ func (s *Server) closeSession() {
 	if controlStop != nil {
 		controlStop()
 	}
-	if conn != nil {
-		_ = conn.Close()
-	}
 	if sess != nil {
 		_ = sess.Close()
+	}
+	if conn != nil {
+		_ = conn.Close()
 	}
 	if oldSID != "" {
 		s.onClose(oldSID, "closed")

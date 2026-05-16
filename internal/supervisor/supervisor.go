@@ -98,6 +98,9 @@ func Run(ctx context.Context, cfg Config, run Runner) error {
 		if err := runCycle(ctx, cfg, run, state, cycle, &lastErr); err != nil {
 			return err
 		}
+		if ctx.Err() != nil {
+			return nil //nolint:nilerr // context cancellation is normal supervisor shutdown
+		}
 	}
 }
 
