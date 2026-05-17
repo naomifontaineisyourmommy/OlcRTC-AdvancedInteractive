@@ -34,6 +34,7 @@ var ErrClosed = errors.New("muxconn: closed")
 // Conn is an io.ReadWriteCloser over a [transport.Transport] with optional AEAD wrapping.
 type Conn struct {
 	ln     transport.Transport
+	send   func([]byte) error
 	cipher *crypto.Cipher
 
 	mu     sync.Mutex
@@ -45,7 +46,20 @@ type Conn struct {
 // New wires a Conn over the given transport. Push must be set as the
 // transport's OnData callback before this conn is used.
 func New(ln transport.Transport, cipher *crypto.Cipher) *Conn {
-	c := &Conn{ln: ln, cipher: cipher}
+	c := &Conn{ln: ln, send: ln.Send, cipher: cipher}
+	c.cond = sync.NewCond(&c.mu)
+	return c
+}
+
+// NewPeer wires a Conn whose writes are addressed to a specific transport peer.
+func NewPeer(ln transport.PeerTransport, cipher *crypto.Cipher, peerID string) *Conn {
+	c := &Conn{
+		ln: ln,
+		send: func(data []byte) error {
+			return ln.SendTo(peerID, data)
+		},
+		cipher: cipher,
+	}
 	c.cond = sync.NewCond(&c.mu)
 	return c
 }
@@ -123,7 +137,7 @@ func (c *Conn) Write(p []byte) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("encrypt: %w", err)
 	}
-	if err := c.ln.Send(enc); err != nil {
+	if err := c.send(enc); err != nil {
 		return 0, fmt.Errorf("send: %w", err)
 	}
 	return len(p), nil

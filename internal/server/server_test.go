@@ -348,7 +348,7 @@ func TestHandleStreamDispatchAfterConnect(t *testing.T) {
 	go func() {
 		stream, err := serverSess.AcceptStream()
 		if err == nil {
-			(&Server{}).handleStream(context.Background(), stream)
+			(&Server{}).handleStream(context.Background(), stream, "")
 		}
 		close(done)
 	}()
@@ -619,7 +619,7 @@ func TestDispatchFiresOnTraffic(t *testing.T) {
 		if err != nil {
 			return
 		}
-		s.handleStream(context.Background(), stream)
+		s.handleStream(context.Background(), stream, "")
 	}()
 
 	stream, err := clientSess.OpenStream()

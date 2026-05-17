@@ -48,15 +48,16 @@ type Credentials struct {
 // peerID/credentials tuple from the room-info HTTP endpoint). Engines that
 // don't need this should ignore it.
 type Config struct {
-	URL       string
-	Token     string
-	Name      string
-	Extra     map[string]string
-	OnData    func([]byte)
-	DNSServer string
-	ProxyAddr string
-	ProxyPort int
-	Refresh   func(ctx context.Context) (Credentials, error)
+	URL        string
+	Token      string
+	Name       string
+	Extra      map[string]string
+	OnData     func([]byte)
+	OnPeerData func(peerID string, data []byte)
+	DNSServer  string
+	ProxyAddr  string
+	ProxyPort  int
+	Refresh    func(ctx context.Context) (Credentials, error)
 }
 
 // Session is the engine-level runtime handle. It is shaped to match what
@@ -76,6 +77,12 @@ type Session interface {
 	GetSendQueue() chan []byte
 	GetBufferedAmount() uint64
 	Capabilities() Capabilities
+}
+
+// PeerSession is implemented by engines that can address byte payloads to a
+// specific remote endpoint and report the sender endpoint on receive.
+type PeerSession interface {
+	SendTo(peerID string, data []byte) error
 }
 
 // VideoTrackCapable is implemented by engines that can exchange video tracks.

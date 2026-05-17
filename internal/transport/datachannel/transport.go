@@ -24,15 +24,16 @@ type streamTransport struct {
 // New creates a datachannel transport backed by a carrier engine.
 func New(ctx context.Context, cfg transport.Config) (transport.Transport, error) {
 	sess, err := enginebuiltin.Open(ctx, cfg.Carrier, enginebuiltin.Config{
-		RoomURL:   cfg.RoomURL,
-		Name:      cfg.Name,
-		OnData:    cfg.OnData,
-		DNSServer: cfg.DNSServer,
-		ProxyAddr: cfg.ProxyAddr,
-		ProxyPort: cfg.ProxyPort,
-		Engine:    cfg.Engine,
-		URL:       cfg.URL,
-		Token:     cfg.Token,
+		RoomURL:    cfg.RoomURL,
+		Name:       cfg.Name,
+		OnData:     cfg.OnData,
+		OnPeerData: cfg.OnPeerData,
+		DNSServer:  cfg.DNSServer,
+		ProxyAddr:  cfg.ProxyAddr,
+		ProxyPort:  cfg.ProxyPort,
+		Engine:     cfg.Engine,
+		URL:        cfg.URL,
+		Token:      cfg.Token,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open engine session: %w", err)
@@ -60,6 +61,24 @@ func (p *streamTransport) Send(data []byte) error {
 		return fmt.Errorf("session send: %w", err)
 	}
 	return nil
+}
+
+// SendTo transmits data to a specific remote endpoint when the engine supports it.
+func (p *streamTransport) SendTo(peerID string, data []byte) error {
+	peer, ok := p.session.(engine.PeerSession)
+	if !ok {
+		return p.Send(data)
+	}
+	if err := peer.SendTo(peerID, data); err != nil {
+		return fmt.Errorf("session send to peer: %w", err)
+	}
+	return nil
+}
+
+// SupportsPeerRouting reports whether this transport can address individual peers.
+func (p *streamTransport) SupportsPeerRouting() bool {
+	_, ok := p.session.(engine.PeerSession)
+	return ok
 }
 
 // Close terminates the transport.

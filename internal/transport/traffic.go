@@ -58,6 +58,27 @@ func (t *trafficTransport) Connect(ctx context.Context) error {
 }
 
 func (t *trafficTransport) Send(data []byte) error {
+	return t.sendWith(func(payload []byte) error {
+		return t.inner.Send(payload)
+	}, data)
+}
+
+func (t *trafficTransport) SendTo(peerID string, data []byte) error {
+	peer, ok := t.inner.(PeerTransport)
+	if !ok || !peer.SupportsPeerRouting() {
+		return t.Send(data)
+	}
+	return t.sendWith(func(payload []byte) error {
+		return peer.SendTo(peerID, payload)
+	}, data)
+}
+
+func (t *trafficTransport) SupportsPeerRouting() bool {
+	peer, ok := t.inner.(PeerTransport)
+	return ok && peer.SupportsPeerRouting()
+}
+
+func (t *trafficTransport) sendWith(send func([]byte) error, data []byte) error {
 	t.sendMu.Lock()
 	defer t.sendMu.Unlock()
 	if t.maxPayloadSize > 0 && len(data) > t.maxPayloadSize {
@@ -66,7 +87,7 @@ func (t *trafficTransport) Send(data []byte) error {
 	if delay := t.nextDelay(); delay > 0 {
 		time.Sleep(delay)
 	}
-	if err := t.inner.Send(data); err != nil {
+	if err := send(data); err != nil {
 		return fmt.Errorf("%w: %w", errTrafficSend, err)
 	}
 	return nil

@@ -41,6 +41,14 @@ type Transport interface {
 	Features() Features
 }
 
+// PeerTransport is implemented by transports whose carrier can identify and
+// address individual remote endpoints.
+type PeerTransport interface {
+	Transport
+	SendTo(peerID string, data []byte) error
+	SupportsPeerRouting() bool
+}
+
 // Options is a marker for per-transport option structs. Each transport package
 // defines its own Options type (e.g. videochannel.Options) and registers a
 // factory that consumes it via type assertion. A nil Options is valid for
@@ -63,16 +71,17 @@ type Config struct {
 	RoomURL string
 	// Engine, URL, Token are forwarded to carrier.Config for the "none" auth
 	// carrier (direct engine access without a service-specific auth flow).
-	Engine    string
-	URL       string
-	Token     string
-	ChannelID string
-	DeviceID  string
-	Name      string
-	OnData    func([]byte)
-	DNSServer string
-	ProxyAddr string
-	ProxyPort int
+	Engine     string
+	URL        string
+	Token      string
+	ChannelID  string
+	DeviceID   string
+	Name       string
+	OnData     func([]byte)
+	OnPeerData func(peerID string, data []byte)
+	DNSServer  string
+	ProxyAddr  string
+	ProxyPort  int
 
 	// Options carries transport-specific tuning. Type is per-transport-package.
 	Options Options
