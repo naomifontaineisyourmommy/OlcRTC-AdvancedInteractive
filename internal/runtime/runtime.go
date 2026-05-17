@@ -49,7 +49,7 @@ func SetupCipher(keyHex string) (*crypto.Cipher, error) {
 func SmuxConfig(maxWirePayload int) *smux.Config {
 	cfg := smux.DefaultConfig()
 	cfg.Version = 2
-	cfg.KeepAliveDisabled = true
+	cfg.KeepAliveDisabled = false
 	cfg.MaxFrameSize = 32768
 	if maxWirePayload > crypto.WireOverhead {
 		maxFrameSize := maxWirePayload - crypto.WireOverhead
@@ -60,7 +60,7 @@ func SmuxConfig(maxWirePayload int) *smux.Config {
 	cfg.MaxReceiveBuffer = 16 * 1024 * 1024
 	cfg.MaxStreamBuffer = 1024 * 1024
 	cfg.KeepAliveInterval = 10 * time.Second
-	cfg.KeepAliveTimeout = 60 * time.Second
+	cfg.KeepAliveTimeout = 30 * time.Second
 	return cfg
 }
 
@@ -76,9 +76,9 @@ func MaxPayload(tr transport.Transport) int {
 // Server and client both embed a HealthTracker to avoid open-coding the
 // same record* methods on both sides.
 type HealthTracker struct {
-	mu       sync.RWMutex
-	status   control.Status
-	notify   func(control.Status)
+	mu     sync.RWMutex
+	status control.Status
+	notify func(control.Status)
 }
 
 // NewHealthTracker creates a HealthTracker that publishes the latest

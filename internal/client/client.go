@@ -217,7 +217,7 @@ func (c *Client) bringUpLink(
 		return fmt.Errorf("smux client: %w", err)
 	}
 
-	control, sid, err := openControlStream(sess, c.deviceID, c.claims)
+	control, sid, err := openControlStream(ctx, sess, c.deviceID, c.claims)
 	if err != nil {
 		_ = sess.Close()
 		_ = c.conn.Close()
@@ -241,14 +241,16 @@ func (c *Client) bringUpLink(
 // The stream stays open for the lifetime of the smux session and carries
 // post-handshake control messages.
 func openControlStream(
+	ctx context.Context,
 	sess *smux.Session,
 	deviceID string,
 	claims map[string]any,
 ) (*smux.Stream, string, error) {
-	return openControlStreamTimeout(sess, deviceID, claims, handshake.DefaultTimeout)
+	return openControlStreamTimeout(ctx, sess, deviceID, claims, handshake.DefaultTimeout)
 }
 
 func openControlStreamTimeout(
+	ctx context.Context,
 	sess *smux.Session,
 	deviceID string,
 	claims map[string]any,
@@ -258,11 +260,23 @@ func openControlStreamTimeout(
 	if err != nil {
 		return nil, "", fmt.Errorf("open control stream: %w", err)
 	}
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			_ = stream.Close()
+		case <-done:
+		}
+	}()
+	defer close(done)
 	_ = stream.SetDeadline(time.Now().Add(timeout))
 	sid, err := handshake.Client(stream, deviceID, claims)
 	_ = stream.SetDeadline(time.Time{})
 	if err != nil {
 		_ = stream.Close()
+		if ctx.Err() != nil {
+			return nil, "", fmt.Errorf("handshake client: %w", ctx.Err())
+		}
 		return nil, "", fmt.Errorf("handshake client: %w", err)
 	}
 	return stream, sid, nil
@@ -316,6 +330,7 @@ func (c *Client) handleReconnect(ctx context.Context, cfg Config, cancel context
 
 	c.recordReconnect()
 	logger.Infof("client reconnect reason=%s - tearing down smux session", reason)
+	c.resetLinkPeer()
 
 	// Install a fresh muxconn immediately so onData never hits nil while
 	// the old session is being torn down. tryReopenSession will swap it
@@ -371,6 +386,15 @@ func (c *Client) handleReconnect(ctx context.Context, cfg Config, cancel context
 	return false
 }
 
+func (c *Client) resetLinkPeer() {
+	c.sessMu.RLock()
+	ln := c.ln
+	c.sessMu.RUnlock()
+	if resetter, ok := ln.(interface{ ResetPeer() }); ok {
+		resetter.ResetPeer()
+	}
+}
+
 func (c *Client) tryReopenSession(
 	ctx context.Context,
 	cfg Config,
@@ -392,7 +416,7 @@ func (c *Client) tryReopenSession(
 		logger.Warnf("smux re-init failed (attempt %d): %v", attempt, err)
 		return false
 	}
-	control, sid, err := openControlStreamTimeout(sess, c.deviceID, c.claims, 2*time.Second)
+	control, sid, err := openControlStreamTimeout(ctx, sess, c.deviceID, c.claims, 2*time.Second)
 	if err != nil {
 		logger.Warnf("handshake on reconnect failed (attempt %d): %v", attempt, err)
 		_ = sess.Close()
@@ -486,6 +510,7 @@ func (c *Client) shutdown() {
 	c.conn = nil
 	c.sessMu.Unlock()
 
+	notifyControlClose(control)
 	if controlStop != nil {
 		controlStop()
 	}
@@ -501,6 +526,18 @@ func (c *Client) shutdown() {
 	if control != nil {
 		_ = control.Close()
 	}
+}
+
+func notifyControlClose(stream *smux.Stream) {
+	if stream == nil {
+		return
+	}
+	_ = stream.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	if err := control.SendClose(stream); err == nil {
+		time.Sleep(200 * time.Millisecond)
+	}
+	_ = stream.SetWriteDeadline(time.Time{})
+	_ = stream.CloseWrite()
 }
 
 func setupCipher(keyHex string) (*crypto.Cipher, error) {

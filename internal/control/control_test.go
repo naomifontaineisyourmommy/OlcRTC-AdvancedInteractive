@@ -124,6 +124,26 @@ func TestRunRejectsBadProtocolVersion(t *testing.T) {
 	}
 }
 
+func TestRunStopsOnPeerClose(t *testing.T) {
+	a, b := controlPair(t)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Run(context.Background(), a, Config{Interval: time.Hour})
+	}()
+	if err := SendClose(b); err != nil {
+		t.Fatalf("SendClose() error = %v", err)
+	}
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, ErrClosedByPeer) {
+			t.Fatalf("Run() error = %v, want ErrClosedByPeer", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for peer close")
+	}
+}
+
 func TestReadFrameRejectsTooLarge(t *testing.T) {
 	a, b := controlPair(t)
 	go func() {

@@ -60,6 +60,7 @@ type Server struct {
 	cipher         *crypto.Cipher
 	conn           *muxconn.Conn
 	session        *smux.Session
+	controlStrm    *smux.Stream
 	controlStop    context.CancelFunc
 	sessMu         sync.RWMutex
 	reinstallMu    sync.Mutex
@@ -307,10 +308,12 @@ func (s *Server) reinstallSession(dead *smux.Session) {
 	}
 	oldSess := s.session
 	oldConn := s.conn
+	oldControl := s.controlStrm
 	oldControlStop := s.controlStop
 	oldSID := s.sessionID
 	s.session = newSess
 	s.conn = newConn
+	s.controlStrm = nil
 	s.controlStop = nil
 	s.sessionID = ""
 	s.deviceID = ""
@@ -325,6 +328,9 @@ func (s *Server) reinstallSession(dead *smux.Session) {
 	if oldConn != nil {
 		_ = oldConn.Close()
 	}
+	if oldControl != nil {
+		_ = oldControl.Close()
+	}
 	if oldSID != "" {
 		s.onClose(oldSID, "reconnect")
 	}
@@ -334,15 +340,18 @@ func (s *Server) closeSession() {
 	s.sessMu.Lock()
 	sess := s.session
 	conn := s.conn
+	control := s.controlStrm
 	controlStop := s.controlStop
 	s.session = nil
 	s.conn = nil
+	s.controlStrm = nil
 	s.controlStop = nil
 	oldSID := s.sessionID
 	s.sessionID = ""
 	s.deviceID = ""
 	s.sessMu.Unlock()
 
+	notifyControlClose(control)
 	if controlStop != nil {
 		controlStop()
 	}
@@ -355,6 +364,18 @@ func (s *Server) closeSession() {
 	if oldSID != "" {
 		s.onClose(oldSID, "closed")
 	}
+}
+
+func notifyControlClose(stream *smux.Stream) {
+	if stream == nil {
+		return
+	}
+	_ = stream.SetWriteDeadline(time.Now().Add(2 * time.Second))
+	if err := control.SendClose(stream); err == nil {
+		time.Sleep(200 * time.Millisecond)
+	}
+	_ = stream.SetWriteDeadline(time.Time{})
+	_ = stream.CloseWrite()
 }
 
 func (s *Server) onData(data []byte) {
@@ -474,6 +495,7 @@ func (s *Server) resetLinkPeer() {
 func (s *Server) startControlLoop(ctx context.Context, sess *smux.Session, stream *smux.Stream) {
 	controlCtx, stop := context.WithCancel(ctx)
 	s.sessMu.Lock()
+	s.controlStrm = stream
 	s.controlStop = stop
 	s.sessMu.Unlock()
 
@@ -519,6 +541,7 @@ func (s *Server) startControlLoop(ctx context.Context, sess *smux.Session, strea
 		}
 		s.recordReconnect()
 		logger.Infof("server reconnect reason=liveness - reinstalling smux session")
+		s.resetLinkPeer()
 		s.reinstallSession(sess)
 	}()
 }

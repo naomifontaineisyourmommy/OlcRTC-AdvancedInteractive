@@ -49,7 +49,7 @@ func TestSetupCipherRejectsBadInput(t *testing.T) {
 
 func TestSmuxConfig(t *testing.T) {
 	cfg := smuxConfig(0)
-	if cfg.Version != 2 || !cfg.KeepAliveDisabled || cfg.MaxFrameSize != 32768 || cfg.MaxReceiveBuffer != 16*1024*1024 {
+	if cfg.Version != 2 || cfg.KeepAliveDisabled || cfg.MaxFrameSize != 32768 || cfg.MaxReceiveBuffer != 16*1024*1024 {
 		t.Fatalf("smuxConfig(0) = %+v", cfg)
 	}
 	capped := smuxConfig(4096)
@@ -211,18 +211,29 @@ func TestOnDataWithNilConn(_ *testing.T) {
 }
 
 type serverLinkStub struct {
-	closed bool
+	closed     bool
+	resetCount int
+	resetCh    chan struct{}
 }
 
-func (s *serverLinkStub) Connect(context.Context) error    { return nil }
-func (s *serverLinkStub) Send([]byte) error                { return nil }
-func (s *serverLinkStub) Close() error                     { s.closed = true; return nil }
-func (s *serverLinkStub) SetReconnectCallback(func())      {}
-func (s *serverLinkStub) SetShouldReconnect(func() bool)   {}
-func (s *serverLinkStub) SetEndedCallback(func(string))    {}
-func (s *serverLinkStub) WatchConnection(context.Context)  {}
-func (s *serverLinkStub) CanSend() bool                    { return true }
-func (s *serverLinkStub) Features() transport.Features     { return transport.Features{} }
+func (s *serverLinkStub) Connect(context.Context) error   { return nil }
+func (s *serverLinkStub) Send([]byte) error               { return nil }
+func (s *serverLinkStub) Close() error                    { s.closed = true; return nil }
+func (s *serverLinkStub) SetReconnectCallback(func())     {}
+func (s *serverLinkStub) SetShouldReconnect(func() bool)  {}
+func (s *serverLinkStub) SetEndedCallback(func(string))   {}
+func (s *serverLinkStub) WatchConnection(context.Context) {}
+func (s *serverLinkStub) CanSend() bool                   { return true }
+func (s *serverLinkStub) Features() transport.Features    { return transport.Features{} }
+func (s *serverLinkStub) ResetPeer() {
+	s.resetCount++
+	if s.resetCh != nil {
+		select {
+		case s.resetCh <- struct{}{}:
+		default:
+		}
+	}
+}
 
 func TestShutdownClosesLinkAndConn(t *testing.T) {
 	cipher, err := cryptopkg.NewCipher("01234567890123456789012345678901")
@@ -460,6 +471,74 @@ func TestStartControlLoopReportsPong(t *testing.T) {
 	}
 	if status.LastPong.IsZero() || status.LastRTT < 0 || status.MissedPongs != 0 {
 		t.Fatalf("Status() = %+v", status)
+	}
+}
+
+func TestStartControlLoopResetsPeerBeforeReinstall(t *testing.T) {
+	a, b := net.Pipe()
+	defer func() {
+		_ = a.Close()
+		_ = b.Close()
+	}()
+
+	serverSess, err := smux.Server(a, smuxConfig(0))
+	if err != nil {
+		t.Fatalf("smux.Server() error = %v", err)
+	}
+	clientSess, err := smux.Client(b, smuxConfig(0))
+	if err != nil {
+		t.Fatalf("smux.Client() error = %v", err)
+	}
+
+	serverStreamCh := make(chan *smux.Stream, 1)
+	go func() {
+		stream, err := serverSess.AcceptStream()
+		if err == nil {
+			serverStreamCh <- stream
+		}
+	}()
+
+	clientStream, err := clientSess.OpenStream()
+	if err != nil {
+		t.Fatalf("OpenStream() error = %v", err)
+	}
+	serverStream := <-serverStreamCh
+
+	cipher, err := cryptopkg.NewCipher("01234567890123456789012345678901")
+	if err != nil {
+		t.Fatalf("NewCipher() error = %v", err)
+	}
+	ln := &serverLinkStub{resetCh: make(chan struct{}, 1)}
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &Server{
+		ln:      ln,
+		cipher:  cipher,
+		conn:    muxconn.New(ln, cipher),
+		session: serverSess,
+		health:  runtime.NewHealthTracker(nil),
+		liveness: control.Config{
+			Interval: time.Hour,
+			Timeout:  time.Hour,
+			Failures: 1,
+		},
+	}
+	defer func() {
+		cancel()
+		s.shutdown()
+		s.wg.Wait()
+		_ = clientSess.Close()
+	}()
+
+	s.startControlLoop(ctx, serverSess, serverStream)
+	_ = clientStream.Close()
+
+	select {
+	case <-ln.resetCh:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for ResetPeer")
+	}
+	if ln.resetCount != 1 {
+		t.Fatalf("ResetPeer calls = %d, want 1", ln.resetCount)
 	}
 }
 

@@ -48,7 +48,7 @@ func TestSetupCipherRejectsBadInput(t *testing.T) {
 
 func TestSmuxConfig(t *testing.T) {
 	cfg := smuxConfig(0)
-	if cfg.Version != 2 || !cfg.KeepAliveDisabled || cfg.MaxFrameSize != 32768 || cfg.MaxReceiveBuffer != 16*1024*1024 {
+	if cfg.Version != 2 || cfg.KeepAliveDisabled || cfg.MaxFrameSize != 32768 || cfg.MaxReceiveBuffer != 16*1024*1024 {
 		t.Fatalf("smuxConfig(0) = %+v", cfg)
 	}
 	capped := smuxConfig(4096)
@@ -491,19 +491,59 @@ func TestSendConnectRequestRejectsBadAck(t *testing.T) {
 	}
 }
 
-type closerLinkStub struct {
-	closed bool
+func TestOpenControlStreamStopsOnContextCancel(t *testing.T) {
+	a, b := net.Pipe()
+	defer func() {
+		_ = a.Close()
+		_ = b.Close()
+	}()
+
+	serverSess, err := smux.Server(a, smuxConfig(0))
+	if err != nil {
+		t.Fatalf("smux.Server() error = %v", err)
+	}
+	defer func() { _ = serverSess.Close() }()
+	clientSess, err := smux.Client(b, smuxConfig(0))
+	if err != nil {
+		t.Fatalf("smux.Client() error = %v", err)
+	}
+	defer func() { _ = clientSess.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	go func() {
+		_, _, err := openControlStreamTimeout(ctx, clientSess, "dev", nil, time.Hour)
+		errCh <- err
+	}()
+
+	time.Sleep(20 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-errCh:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("openControlStreamTimeout() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for context cancellation")
+	}
 }
 
-func (s *closerLinkStub) Connect(context.Context) error    { return nil }
-func (s *closerLinkStub) Send([]byte) error                { return nil }
-func (s *closerLinkStub) Close() error                     { s.closed = true; return nil }
-func (s *closerLinkStub) SetReconnectCallback(func())      {}
-func (s *closerLinkStub) SetShouldReconnect(func() bool)   {}
-func (s *closerLinkStub) SetEndedCallback(func(string))    {}
-func (s *closerLinkStub) WatchConnection(context.Context)  {}
-func (s *closerLinkStub) CanSend() bool                    { return true }
-func (s *closerLinkStub) Features() transport.Features     { return transport.Features{} }
+type closerLinkStub struct {
+	closed     bool
+	resetCount int
+}
+
+func (s *closerLinkStub) Connect(context.Context) error   { return nil }
+func (s *closerLinkStub) Send([]byte) error               { return nil }
+func (s *closerLinkStub) Close() error                    { s.closed = true; return nil }
+func (s *closerLinkStub) SetReconnectCallback(func())     {}
+func (s *closerLinkStub) SetShouldReconnect(func() bool)  {}
+func (s *closerLinkStub) SetEndedCallback(func(string))   {}
+func (s *closerLinkStub) WatchConnection(context.Context) {}
+func (s *closerLinkStub) CanSend() bool                   { return true }
+func (s *closerLinkStub) Features() transport.Features    { return transport.Features{} }
+func (s *closerLinkStub) ResetPeer()                      { s.resetCount++ }
 
 func TestOnDataWithNilConn(_ *testing.T) {
 	c := &Client{}
@@ -524,6 +564,15 @@ func TestShutdownClosesLinkAndConn(t *testing.T) {
 	c.shutdown()
 	if !ln.closed {
 		t.Fatal("shutdown() did not close link")
+	}
+}
+
+func TestResetLinkPeer(t *testing.T) {
+	ln := &closerLinkStub{}
+	c := &Client{ln: ln}
+	c.resetLinkPeer()
+	if ln.resetCount != 1 {
+		t.Fatalf("ResetPeer calls = %d, want 1", ln.resetCount)
 	}
 }
 

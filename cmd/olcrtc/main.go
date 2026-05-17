@@ -334,13 +334,13 @@ func (f filteredWriter) Write(p []byte) (int, error) {
 }
 
 func configureLogging(debug bool) {
+	log.SetOutput(filteredWriter{w: os.Stderr})
 	if debug {
 		logger.SetVerbose(true)
 		return
 	}
 	_ = os.Setenv("PION_LOG_DISABLE", "all")
 	lksdk.SetLogger(protoLogger.GetDiscardLogger())
-	log.SetOutput(filteredWriter{w: os.Stderr})
 }
 
 func resolveDataDir(dataDir string) (string, error) {

@@ -44,11 +44,15 @@ const (
 	TypePing MsgType = "CONTROL_PING"
 	// TypePong replies to a ping with the same sequence and timestamp.
 	TypePong MsgType = "CONTROL_PONG"
+	// TypeClose tells the peer this control session is intentionally closing.
+	TypeClose MsgType = "CONTROL_CLOSE"
 )
 
 var (
 	// ErrUnhealthy is returned when the stream misses too many pong replies.
 	ErrUnhealthy = errors.New("control stream unhealthy")
+	// ErrClosedByPeer is returned when the peer gracefully closes the control session.
+	ErrClosedByPeer = errors.New("control stream closed by peer")
 	// ErrProtocolVersion is returned when the peer announces an incompatible version.
 	ErrProtocolVersion = errors.New("incompatible control protocol version")
 	// ErrUnexpectedMessage is returned for unknown or malformed control message types.
@@ -184,6 +188,8 @@ func (s *state) readLoop(ctx context.Context) error {
 			}
 		case TypePong:
 			s.handlePong(msg)
+		case TypeClose:
+			return ErrClosedByPeer
 		default:
 			return fmt.Errorf("%w: got %q", ErrUnexpectedMessage, msg.Type)
 		}
@@ -302,10 +308,15 @@ func parseMessage(raw []byte) (Message, error) {
 		return Message{}, fmt.Errorf("%w: peer v%d, local v%d",
 			ErrProtocolVersion, msg.Version, ProtoVersion)
 	}
-	if msg.Type != TypePing && msg.Type != TypePong {
+	if msg.Type != TypePing && msg.Type != TypePong && msg.Type != TypeClose {
 		return Message{}, fmt.Errorf("%w: got %q", ErrUnexpectedMessage, msg.Type)
 	}
 	return msg, nil
+}
+
+// SendClose sends a best-effort graceful close notification on the control stream.
+func SendClose(w io.Writer) error {
+	return writeFrame(w, Message{Version: ProtoVersion, Type: TypeClose})
 }
 
 func writeFrame(w io.Writer, msg Message) error {

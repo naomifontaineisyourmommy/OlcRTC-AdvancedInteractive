@@ -37,6 +37,10 @@ func TestSmuxConfigDefault(t *testing.T) {
 	if cfg.Version != 2 || cfg.MaxFrameSize != 32768 {
 		t.Fatalf("SmuxConfig(0) = %+v", cfg)
 	}
+	if cfg.KeepAliveDisabled || cfg.KeepAliveInterval != 10*time.Second ||
+		cfg.KeepAliveTimeout != 30*time.Second {
+		t.Fatalf("SmuxConfig(0) keepalive = %+v", cfg)
+	}
 }
 
 func TestSmuxConfigShrinks(t *testing.T) {
