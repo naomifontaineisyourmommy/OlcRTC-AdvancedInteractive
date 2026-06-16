@@ -576,8 +576,8 @@ func TestValidateGen(t *testing.T) {
 		want error
 	}{
 		{
-			name: "wbstream room generation unsupported",
-			cfg:  Config{Auth: testAuthWBStream, DNSServer: "8.8.8.8:53", Amount: 3},
+			name: "jitsi room generation unsupported",
+			cfg:  Config{Auth: "jitsi", DNSServer: "8.8.8.8:53", Amount: 3},
 			want: ErrUnsupportedCarrier,
 		},
 		{
