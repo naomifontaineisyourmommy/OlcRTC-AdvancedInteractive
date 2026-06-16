@@ -44,6 +44,9 @@ type Config struct {
 	Engine string
 	URL    string
 	Token  string
+	// AccountToken is forwarded to the auth provider's Issue. When set, a
+	// provider that supports owner mode (wbstream) connects as room owner.
+	AccountToken string
 }
 
 // Factory creates an engine session for a given carrier.
@@ -114,11 +117,12 @@ func registerDirect(name string) {
 func registerEngineAuth(name string, provider auth.Provider) {
 	Register(name, func(ctx context.Context, cfg Config) (engine.Session, error) {
 		authCfg := auth.Config{
-			RoomURL:   cfg.RoomURL,
-			Name:      cfg.Name,
-			DNSServer: cfg.DNSServer,
-			ProxyAddr: cfg.ProxyAddr,
-			ProxyPort: cfg.ProxyPort,
+			RoomURL:      cfg.RoomURL,
+			Name:         cfg.Name,
+			AccountToken: cfg.AccountToken,
+			DNSServer:    cfg.DNSServer,
+			ProxyAddr:    cfg.ProxyAddr,
+			ProxyPort:    cfg.ProxyPort,
 		}
 		creds, err := provider.Issue(ctx, authCfg)
 		if err != nil {
