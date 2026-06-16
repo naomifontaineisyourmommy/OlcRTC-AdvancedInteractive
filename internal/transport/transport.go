@@ -115,17 +115,20 @@ type Config struct {
 	RoomURL string
 	// Engine, URL, Token are forwarded to carrier.Config for the "none" auth
 	// carrier (direct engine access without a service-specific auth flow).
-	Engine     string
-	URL        string
-	Token      string
-	ChannelID  string
-	DeviceID   string
-	Name       string
-	OnData     func([]byte)
-	OnPeerData func(peerID string, data []byte)
-	DNSServer  string
-	ProxyAddr  string
-	ProxyPort  int
+	Engine string
+	URL    string
+	Token  string
+	// AccountToken is a service account bearer token forwarded to the auth
+	// provider so it connects as room owner rather than guest (wbstream).
+	AccountToken string
+	ChannelID    string
+	DeviceID     string
+	Name         string
+	OnData       func([]byte)
+	OnPeerData   func(peerID string, data []byte)
+	DNSServer    string
+	ProxyAddr    string
+	ProxyPort    int
 
 	// RequireTargetedPeer makes single-peer engines ignore broadcast frames
 	// from unrelated olcrtc clients until a peer sends a frame addressed to
