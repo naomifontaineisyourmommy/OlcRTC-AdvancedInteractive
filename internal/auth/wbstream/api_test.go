@@ -122,3 +122,58 @@ func TestWBStreamIssueRequiresRoom(t *testing.T) {
 		}
 	}
 }
+
+func TestWBStreamCreateRoom(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api-room/api/v2/room", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer "+testAccessToken {
+			t.Fatalf("Authorization = %q", got)
+		}
+		_ = json.NewEncoder(w).Encode(createRoomResponse{RoomID: testRoomID}) //nolint:gosec
+	})
+	withWBAPIServer(t, mux)
+
+	roomID, err := Provider{}.CreateRoom(context.Background(), auth.Config{AccountToken: testAccessToken})
+	if err != nil {
+		t.Fatalf("CreateRoom() error = %v", err)
+	}
+	if roomID != testRoomID {
+		t.Fatalf("CreateRoom() = %q, want %q", roomID, testRoomID)
+	}
+}
+
+func TestWBStreamCreateRoomRequiresToken(t *testing.T) {
+	if _, err := (Provider{}).CreateRoom(context.Background(), auth.Config{}); !errors.Is(err, ErrTokenRequired) {
+		t.Fatalf("CreateRoom(no token) error = %v, want %v", err, ErrTokenRequired)
+	}
+}
+
+func TestWBStreamIssueOwner(t *testing.T) {
+	const ownerToken = "owner-account-token"
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /auth/api/v1/auth/user/guest-register", func(http.ResponseWriter, *http.Request) {
+		t.Fatal("owner path must not register a guest")
+	})
+	mux.HandleFunc("POST /api-room/api/v1/room/{id}/join", func(http.ResponseWriter, *http.Request) {
+		t.Fatal("owner path must not call join")
+	})
+	mux.HandleFunc("GET /api-room-manager/v2/room/{id}/connection-details", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "Bearer "+ownerToken {
+			t.Fatalf("Authorization = %q, want owner token", got)
+		}
+		_ = json.NewEncoder(w).Encode(tokenResponse{RoomToken: testToken, ServerURL: "wss://rtc.example"}) //nolint:gosec
+	})
+	withWBAPIServer(t, mux)
+
+	creds, err := Provider{}.Issue(context.Background(), auth.Config{
+		RoomURL:      testRoomID,
+		Name:         testPeerName,
+		AccountToken: ownerToken,
+	})
+	if err != nil {
+		t.Fatalf("Issue(owner) error = %v", err)
+	}
+	if creds.Token != testToken || creds.URL != "wss://rtc.example" {
+		t.Fatalf("creds = %+v", creds)
+	}
+}

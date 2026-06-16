@@ -224,15 +224,16 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
 	}
 
 	session, err := enginebuiltin.Open(ctx, cfg.Carrier, enginebuiltin.Config{
-		RoomURL:   cfg.RoomURL,
-		Name:      cfg.Name,
-		OnData:    nil,
-		DNSServer: cfg.DNSServer,
-		ProxyAddr: cfg.ProxyAddr,
-		ProxyPort: cfg.ProxyPort,
-		Engine:    cfg.Engine,
-		URL:       cfg.URL,
-		Token:     cfg.Token,
+		RoomURL:      cfg.RoomURL,
+		Name:         cfg.Name,
+		OnData:       nil,
+		DNSServer:    cfg.DNSServer,
+		ProxyAddr:    cfg.ProxyAddr,
+		ProxyPort:    cfg.ProxyPort,
+		Engine:       cfg.Engine,
+		URL:          cfg.URL,
+		Token:        cfg.Token,
+		AccountToken: cfg.AccountToken,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open engine session: %w", err)
