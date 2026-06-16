@@ -79,6 +79,10 @@ type Failover struct {
 // Auth selects the auth provider.
 type Auth struct {
 	Provider string `yaml:"provider"` // telemost, wbstream, none
+	// Token is an optional service account bearer token used by providers that
+	// connect as room owner (e.g. a WB Stream access token for wbstream owner
+	// mode). It is set directly in the config; there is no separate token file.
+	Token string `yaml:"token"`
 }
 
 // Room identifies the conference room.
@@ -250,6 +254,7 @@ func Apply(dst session.Config, f File) session.Config {
 	dst.Mode = pickString(dst.Mode, f.Mode)
 	dst.Transport = pickString(dst.Transport, f.Net.Transport)
 	dst.Auth = pickString(dst.Auth, f.Auth.Provider)
+	dst.AccountToken = pickString(dst.AccountToken, f.Auth.Token)
 	dst.Engine = pickString(dst.Engine, f.Engine.Name)
 	dst.URL = pickString(dst.URL, f.Engine.URL)
 	dst.Token = pickString(dst.Token, f.Engine.Token)
