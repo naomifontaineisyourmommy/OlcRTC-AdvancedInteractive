@@ -45,6 +45,11 @@ type Config struct {
 	RoomURL string
 	// Name is the display name to register with.
 	Name string
+	// AccountToken is a service account bearer token (e.g. a WB Stream access
+	// token). When set, a provider that supports owner mode (wbstream) connects
+	// as the room owner instead of a guest, and (via RoomCreator) can create a
+	// room. Optional; only consumed by providers that document it.
+	AccountToken string
 	// DNSServer / ProxyAddr / ProxyPort are network knobs for outbound HTTP.
 	DNSServer string
 	ProxyAddr string
