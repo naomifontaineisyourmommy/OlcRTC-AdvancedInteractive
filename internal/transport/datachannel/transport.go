@@ -34,6 +34,7 @@ func New(ctx context.Context, cfg transport.Config) (transport.Transport, error)
 		Engine:              cfg.Engine,
 		URL:                 cfg.URL,
 		Token:               cfg.Token,
+		AccountToken:        cfg.AccountToken,
 		RequireTargetedPeer: cfg.RequireTargetedPeer,
 	})
 	if err != nil {

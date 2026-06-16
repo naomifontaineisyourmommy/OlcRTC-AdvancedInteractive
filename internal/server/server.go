@@ -138,8 +138,11 @@ type Config struct {
 	Engine           string
 	URL              string
 	Token            string
-	Liveness         control.Config
-	Traffic          transport.TrafficConfig
+	// AccountToken is a service account bearer token. When set, the carrier's
+	// auth provider connects as the room owner instead of a guest (wbstream).
+	AccountToken string
+	Liveness     control.Config
+	Traffic      transport.TrafficConfig
 
 	// AuthHook is invoked after CLIENT_HELLO to authorize the client and
 	// return a session ID. If nil, every client is admitted with a random UUID.
@@ -263,21 +266,22 @@ func (s *Server) bringUpLink(
 ) error {
 	s.baseCtx = ctx
 	ln, err := transport.New(ctx, cfg.Transport, transport.Config{
-		Carrier:    cfg.Carrier,
-		RoomURL:    cfg.RoomURL,
-		Engine:     cfg.Engine,
-		URL:        cfg.URL,
-		Token:      cfg.Token,
-		ChannelID:  cfg.ChannelID,
-		DeviceID:   "",
-		Name:       names.Generate(),
-		OnData:     s.onData,
-		OnPeerData: s.onPeerData,
-		DNSServer:  s.dnsServer,
-		ProxyAddr:  s.socksProxyAddr,
-		ProxyPort:  s.socksProxyPort,
-		Options:    cfg.TransportOptions,
-		Traffic:    cfg.Traffic,
+		Carrier:      cfg.Carrier,
+		RoomURL:      cfg.RoomURL,
+		Engine:       cfg.Engine,
+		URL:          cfg.URL,
+		Token:        cfg.Token,
+		AccountToken: cfg.AccountToken,
+		ChannelID:    cfg.ChannelID,
+		DeviceID:     "",
+		Name:         names.Generate(),
+		OnData:       s.onData,
+		OnPeerData:   s.onPeerData,
+		DNSServer:    s.dnsServer,
+		ProxyAddr:    s.socksProxyAddr,
+		ProxyPort:    s.socksProxyPort,
+		Options:      cfg.TransportOptions,
+		Traffic:      cfg.Traffic,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create transport: %w", err)
