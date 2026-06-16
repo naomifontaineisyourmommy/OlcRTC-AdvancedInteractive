@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
 	"slices"
 	"sync/atomic"
 	"time"
@@ -176,6 +177,7 @@ type Config struct {
 	Mode                  string
 	Transport             string
 	Auth                  string
+	AccountToken          string
 	Engine                string
 	URL                   string
 	Token                 string
@@ -381,7 +383,9 @@ func validateTransportRegistration(cfg Config) error {
 }
 
 func validateCommon(cfg Config) error {
-	if cfg.RoomID == "" && cfg.Auth != authNone {
+	// An owner-mode wbstream server (mode srv + account token) creates its room
+	// at startup, so room.id may be omitted in that case.
+	if cfg.RoomID == "" && cfg.Auth != authNone && !(cfg.Mode == modeSRV && cfg.AccountToken != "") {
 		return ErrRoomIDRequired
 	}
 	if cfg.KeyHex == "" {
@@ -600,6 +604,14 @@ func Run(ctx context.Context, cfg Config) error {
 	cfg = ApplyLivenessDefaults(cfg)
 	configureDefaultResolver(cfg.DNSServer)
 	roomURL := cfg.RoomID
+	if cfg.Mode == modeSRV && cfg.AccountToken != "" && roomURL == "" {
+		id, err := createOwnerRoom(ctx, cfg)
+		if err != nil {
+			return fmt.Errorf("create owner room: %w", err)
+		}
+		fmt.Fprintf(os.Stdout, "Created and connected to WB Stream room id: %s\n", id)
+		roomURL = id
+	}
 	liveness, err := livenessConfig(cfg)
 	if err != nil {
 		return err
@@ -660,6 +672,7 @@ func runOnce(
 			Engine:           cfg.Engine,
 			URL:              cfg.URL,
 			Token:            cfg.Token,
+			AccountToken:     cfg.AccountToken,
 			Liveness:         liveness,
 			Traffic:          traffic,
 			OnSessionOpen: func(sessionID, deviceID string, claims map[string]any) {
@@ -792,6 +805,22 @@ func genRetry(ctx context.Context, fn func(context.Context) error) error {
 		}
 	}
 	return lastErr
+}
+
+func createOwnerRoom(ctx context.Context, cfg Config) (string, error) {
+	p, err := auth.Get(cfg.Auth)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", ErrUnsupportedCarrier, cfg.Auth)
+	}
+	creator, ok := p.(auth.RoomCreator)
+	if !ok {
+		return "", fmt.Errorf("%w: %s does not support room creation", ErrUnsupportedCarrier, cfg.Auth)
+	}
+	return creator.CreateRoom(ctx, auth.Config{
+		Name:         names.Generate(),
+		AccountToken: cfg.AccountToken,
+		DNSServer:    cfg.DNSServer,
+	})
 }
 
 // Gen creates cfg.Amount rooms for the configured auth provider and writes each room ID to out.
